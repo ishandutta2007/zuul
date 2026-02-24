@@ -62,6 +62,10 @@ import org.slf4j.LoggerFactory;
 public class SslHandshakeInfoHandler extends ChannelInboundHandlerAdapter {
 
     public static final AttributeKey<SslHandshakeInfo> ATTR_SSL_INFO = AttributeKey.newInstance("_ssl_handshake_info");
+
+    // optionally set by an outbound handler that parses the TLS ServerHello key_share extension
+    public static final AttributeKey<String> ATTR_SSL_NAMED_GROUP = AttributeKey.newInstance("_ssl_named_group");
+
     private static final Logger logger = LoggerFactory.getLogger(SslHandshakeInfoHandler.class);
 
     // extracts reason string from SSL errors formatted in the open ssl style
@@ -140,16 +144,18 @@ public class SslHandshakeInfoHandler extends ChannelInboundHandlerAdapter {
                         logger.warn("Error getting the request server names.", e);
                     }
 
-                    SslHandshakeInfo info = new SslHandshakeInfo(
-                            requestedSni,
-                            isSSlFromIntermediary,
-                            session.getProtocol(),
-                            session.getCipherSuite(),
-                            clientAuth,
-                            serverCert,
-                            peerCert,
-                            tlsHandshakeUsingExternalPSK,
-                            clientPSKIdentityInfo);
+                    SslHandshakeInfo info = SslHandshakeInfo.builder()
+                            .requestedSni(requestedSni)
+                            .isOfIntermediary(isSSlFromIntermediary)
+                            .protocol(session.getProtocol())
+                            .cipherSuite(session.getCipherSuite())
+                            .namedGroup(ctx.channel().attr(ATTR_SSL_NAMED_GROUP).get())
+                            .clientAuthRequirement(clientAuth)
+                            .serverCertificate(serverCert)
+                            .clientCertificate(peerCert)
+                            .usingExternalPSK(tlsHandshakeUsingExternalPSK)
+                            .clientPSKIdentityInfo(clientPSKIdentityInfo)
+                            .build();
                     ctx.channel().attr(ATTR_SSL_INFO).set(info);
 
                     // Metrics.
@@ -215,8 +221,10 @@ public class SslHandshakeInfoHandler extends ChannelInboundHandlerAdapter {
                                     .map(sni -> ((SNIHostName) sni).getAsciiName())
                                     .orElse("none");
 
-                            info = new SslHandshakeInfo(
-                                    requestedSni, isSSlFromIntermediary, null, null, null, null, null, false, null);
+                            info = SslHandshakeInfo.builder()
+                                    .requestedSni(requestedSni)
+                                    .isOfIntermediary(isSSlFromIntermediary)
+                                    .build();
                         }
                         incrementCounters(sslEvent, info);
                     }
@@ -285,6 +293,7 @@ public class SslHandshakeInfoHandler extends ChannelInboundHandlerAdapter {
                         "ciphersuite",
                         handshakeInfo.getCipherSuite().isEmpty() ? "unknown" : handshakeInfo.getCipherSuite()));
                 tagList.add(Tag.of("clientauth", String.valueOf(handshakeInfo.getClientAuthRequirement())));
+                tagList.add(Tag.of("namedgroup", Objects.requireNonNullElse(handshakeInfo.getNamedGroup(), "unknown")));
 
             } else {
                 tagList.add(Tag.of("failure_cause", getFailureCause(sslHandshakeCompletionEvent.cause())));

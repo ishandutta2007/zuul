@@ -20,15 +20,22 @@ import com.netflix.zuul.netty.server.psk.ClientPSKIdentityInfo;
 import io.netty.handler.ssl.ClientAuth;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 
 /**
- * User: michaels@netflix.com Date: 3/29/16 Time: 11:06 AM
+ * Captures TLS handshake details for a connection, including the negotiated protocol,
+ * cipher suite, named group, and client authentication state.
  */
+@Builder
+@AllArgsConstructor(access = AccessLevel.PACKAGE)
 public class SslHandshakeInfo {
 
     private final String requestedSni;
     private final String protocol;
     private final String cipherSuite;
+    private final String namedGroup;
     private final ClientAuth clientAuthRequirement;
     private final Certificate serverCertificate;
     private final X509Certificate clientCertificate;
@@ -36,6 +43,10 @@ public class SslHandshakeInfo {
     private final boolean usingExternalPSK;
     private final ClientPSKIdentityInfo clientPSKIdentityInfo;
 
+    /**
+     * Use {@link SslHandshakeInfo#builder()} instead.
+     */
+    @Deprecated
     public SslHandshakeInfo(
             boolean isOfIntermediary,
             String protocol,
@@ -46,6 +57,10 @@ public class SslHandshakeInfo {
         this("", isOfIntermediary, protocol, cipherSuite, clientAuthRequirement, serverCertificate, clientCertificate);
     }
 
+    /**
+     * Use {@link SslHandshakeInfo#builder()} instead.
+     */
+    @Deprecated
     public SslHandshakeInfo(
             String requestedSni,
             boolean isOfIntermediary,
@@ -66,6 +81,10 @@ public class SslHandshakeInfo {
                 null);
     }
 
+    /**
+     * Use {@link SslHandshakeInfo#builder()} instead.
+     */
+    @Deprecated
     public SslHandshakeInfo(
             boolean isOfIntermediary,
             String protocol,
@@ -87,6 +106,10 @@ public class SslHandshakeInfo {
                 clientPSKIdentityInfo);
     }
 
+    /**
+     * Use {@link SslHandshakeInfo#builder()} instead.
+     */
+    @Deprecated
     public SslHandshakeInfo(
             String requestedSni,
             boolean isOfIntermediary,
@@ -100,6 +123,7 @@ public class SslHandshakeInfo {
         this.requestedSni = requestedSni;
         this.protocol = protocol;
         this.cipherSuite = cipherSuite;
+        this.namedGroup = null;
         this.clientAuthRequirement = clientAuthRequirement;
         this.serverCertificate = serverCertificate;
         this.clientCertificate = clientCertificate;
@@ -122,6 +146,10 @@ public class SslHandshakeInfo {
 
     public String getCipherSuite() {
         return cipherSuite;
+    }
+
+    public String getNamedGroup() {
+        return namedGroup;
     }
 
     public ClientAuth getClientAuthRequirement() {
@@ -148,7 +176,8 @@ public class SslHandshakeInfo {
     public String toString() {
         return "SslHandshakeInfo{" + "protocol='"
                 + protocol + '\'' + ", cipherSuite='"
-                + cipherSuite + '\'' + ", clientAuthRequirement="
+                + cipherSuite + '\'' + ", namedGroup='"
+                + namedGroup + '\'' + ", clientAuthRequirement="
                 + clientAuthRequirement + ", serverCertificate="
                 + serverCertificate + ", clientCertificate="
                 + clientCertificate + ", isOfIntermediary="
