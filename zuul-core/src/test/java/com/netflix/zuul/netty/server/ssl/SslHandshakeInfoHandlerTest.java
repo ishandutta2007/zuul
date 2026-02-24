@@ -281,7 +281,6 @@ public class SslHandshakeInfoHandlerTest {
 
         String verifySni = Objects.equals(sni, "") ? "none" : sni;
 
-        // Verify success counter was incremented
         assertThat(registry.counter(
                                 "server.ssl.handshake",
                                 "success",
@@ -293,25 +292,82 @@ public class SslHandshakeInfoHandlerTest {
                                 "ciphersuite",
                                 "TLS_AES_256_GCM_SHA384",
                                 "clientauth",
-                                "NONE")
+                                "NONE",
+                                "namedgroup",
+                                "unknown")
                         .count())
                 .isEqualTo(1);
 
-        // Verify SslHandshakeInfo was stored in channel attributes
         SslHandshakeInfo info =
                 channel.attr(SslHandshakeInfoHandler.ATTR_SSL_INFO).get();
         assertThat(info).isNotNull();
         assertThat(info.getRequestedSni()).isEqualTo(verifySni);
         assertThat(info.getProtocol()).isEqualTo("TLSv1.3");
         assertThat(info.getCipherSuite()).isEqualTo("TLS_AES_256_GCM_SHA384");
+        assertThat(info.getNamedGroup()).isNull();
         assertThat(info.getClientAuthRequirement()).isEqualTo(ClientAuth.NONE);
         assertThat(info.getClientCertificate()).isNull();
 
-        // Verify passport state was updated
         assertThat(CurrentPassport.fromChannel(channel).getState())
                 .isEqualTo(PassportState.SERVER_CH_SSL_HANDSHAKE_COMPLETE);
 
-        // Verify handler was removed from pipeline
         assertThat(channel.pipeline().context(SslHandshakeInfoHandler.class)).isNull();
+    }
+
+    @Test
+    public void handshakeSuccessWithNamedGroup() throws Exception {
+        Registry registry = new DefaultRegistry();
+
+        SslHandshakeInfoHandler handler = new SslHandshakeInfoHandler(registry, false);
+
+        EmbeddedChannel channel = new EmbeddedChannel();
+        CurrentPassport.fromChannel(channel);
+
+        channel.attr(SslHandshakeInfoHandler.ATTR_SSL_NAMED_GROUP).set("x25519");
+
+        SSLEngine sslEngine = mock(SSLEngine.class);
+        ExtendedSSLSession sslSession = mock(ExtendedSSLSession.class);
+        X509Certificate serverCert = mock(X509Certificate.class);
+
+        when(sslEngine.getSession()).thenReturn(sslSession);
+        when(sslEngine.getNeedClientAuth()).thenReturn(false);
+        when(sslEngine.getWantClientAuth()).thenReturn(false);
+        when(sslSession.getProtocol()).thenReturn("TLSv1.3");
+        when(sslSession.getCipherSuite()).thenReturn("TLS_AES_128_GCM_SHA256");
+        when(sslSession.getLocalCertificates()).thenReturn(new Certificate[] {serverCert});
+        when(sslSession.getPeerCertificates()).thenReturn(new Certificate[0]);
+        when(sslSession.getRequestedServerNames()).thenReturn(List.of(new SNIHostName("www.netflix.com")));
+
+        SslHandler sslHandler = mock(SslHandler.class);
+        when(sslHandler.engine()).thenReturn(sslEngine);
+        channel.pipeline().addLast("ssl", sslHandler);
+        channel.pipeline().addLast(handler);
+
+        ChannelHandlerContext ctx = channel.pipeline().context(handler);
+        handler.userEventTriggered(ctx, SslHandshakeCompletionEvent.SUCCESS);
+
+        assertThat(registry.counter(
+                                "server.ssl.handshake",
+                                "success",
+                                "true",
+                                "sni",
+                                "www.netflix.com",
+                                "protocol",
+                                "TLSv1.3",
+                                "ciphersuite",
+                                "TLS_AES_128_GCM_SHA256",
+                                "clientauth",
+                                "NONE",
+                                "namedgroup",
+                                "x25519")
+                        .count())
+                .isEqualTo(1);
+
+        SslHandshakeInfo info =
+                channel.attr(SslHandshakeInfoHandler.ATTR_SSL_INFO).get();
+        assertThat(info).isNotNull();
+        assertThat(info.getNamedGroup()).isEqualTo("x25519");
+        assertThat(info.getProtocol()).isEqualTo("TLSv1.3");
+        assertThat(info.getCipherSuite()).isEqualTo("TLS_AES_128_GCM_SHA256");
     }
 }
