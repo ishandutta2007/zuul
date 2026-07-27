@@ -263,6 +263,38 @@ class ProxyEndpointTest {
     }
 
     @Test
+    void closeNotifyConnectionRetriedOnlyForIdempotentMethods() {
+        assertThat(proxyEndpoint.isRetryable(OutboundErrorType.CLOSE_NOTIFY_CONNECTION))
+                .isFalse();
+
+        HttpRequestMessage getRequest = createRequest(context, "GET", "/some/where");
+        getRequest.setBody(new byte[0]);
+        getRequest.storeInboundRequest();
+        ProxyEndpoint getProxyEndpoint =
+                spy(new ProxyEndpoint(getRequest, chc, null, MethodBinding.NO_OP_BINDING, attemptFactory) {
+                    @Override
+                    public NettyOrigin getOrigin(HttpRequestMessage request) {
+                        return nettyOrigin;
+                    }
+
+                    @Override
+                    protected OriginTimeoutManager getTimeoutManager(NettyOrigin origin) {
+                        return timeoutManager;
+                    }
+                });
+
+        assertThat(getProxyEndpoint.isRetryable(OutboundErrorType.CLOSE_NOTIFY_CONNECTION))
+                .isTrue();
+    }
+
+    @Test
+    void connectionErrorsRetriedForAnyMethod() {
+        assertThat(proxyEndpoint.isRetryable(OutboundErrorType.RESET_CONNECTION))
+                .isTrue();
+        assertThat(proxyEndpoint.isRetryable(OutboundErrorType.CONNECT_ERROR)).isTrue();
+    }
+
+    @Test
     public void lastContentAfterProxyStartedIsConsideredReplayable() {
         Promise<PooledConnection> promise = channel.eventLoop().newPromise();
 
